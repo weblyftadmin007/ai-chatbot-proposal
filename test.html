@@ -4,87 +4,161 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chatbot Widget Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    h1 { margin: 0 0 0.4rem; }
+    .note { margin: 0 0 1rem; color: #64748b; font-size: 0.95rem; }
+    .host {
+      margin-top: 1rem;
+      padding: .7rem 1rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #fff;
+      color: #64748b;
+      font-size: .85rem;
+      word-break: break-all;
+    }
+    .fallback {
+      margin-top: 1rem;
+      font-size: .9rem;
+      color: #64748b;
+    }
+    .fallback code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; }
+    .error { color: #B91C1C; }
+  </style>
 </head>
 <body>
-  <h1>Chatbot test page</h1>
-  <p>If the chat button appears, the widget loaded for the snippet in the URL.</p>
- 
-  <div id="widget-host"></div>
- 
+  <div class="wrap">
+    <h1>Chatbot test page</h1>
+    <p class="note">
+      If the chat button appears bottom-right, the widget loaded for the
+      snippet in the URL.
+    </p>
+
+    <div id="widget-host"></div>
+
+    <p id="output" class="fallback" hidden></p>
+  </div>
+
   <script>
     (function () {
-      const host = document.getElementById('widget-host');
- 
+      var host = document.getElementById('widget-host');
+      var output = document.getElementById('output');
+
+      function showHost(html) {
+        host.innerHTML = html;
+      }
+
+      function showFallback(message, isError) {
+        output.hidden = false;
+        output.className = 'fallback' + (isError ? ' error' : '');
+        output.textContent = message;
+      }
+
       function stripHtml(html) {
-        const tmp = document.createElement('div');
+        var tmp = document.createElement('div');
         tmp.innerHTML = html;
         return tmp.textContent || tmp.innerText || '';
       }
- 
-      function showFallback(message) {
-        const p = document.createElement('p');
-        p.style.color = '#64748b';
-        p.textContent = message;
-        host.appendChild(p);
-      }
- 
+
       function decode(s) {
         try { return decodeURIComponent(s); }
         catch (e) { return s; }
       }
- 
-      const params = new URLSearchParams(location.search);
-      let snippet = params.get('script');
- 
-      if (snippet) {
-        snippet = decode(snippet);
-        if (!snippet.trim().toLowerCase().startsWith('<script')) {
-          showFallback('The script parameter did not look like a <script> tag.');
-          return;
+
+      function removeOldScripts() {
+        var old = host.querySelectorAll('script[src*="widget.js"]');
+        for (var i = 0; i < old.length; i++) {
+          old[i].remove();
         }
-      } else {
-        const tenant = params.get('tenant');
-        if (tenant) {
-          const widgetHost = 'https://chatbot-widget-0of.pages.dev';
-          const apiHost = 'https://chatbot-api.weblyftt.workers.dev';
-          snippet =
-            '<script src="' +
-            widgetHost +
-            '/widget.js" data-tenant="' +
-            tenant +
-            '" data-api-url="' +
-            apiHost +
-            '"></script>';
-          host.innerHTML = snippet;
-          const note = document.createElement('p');
+      }
+
+      function insertScriptElement(snippet) {
+        var temp = document.createElement('div');
+        temp.innerHTML = snippet;
+        var firstChild = temp.firstChild;
+        while (temp.firstChild) {
+          host.appendChild(temp.firstChild);
+        }
+
+        if (!firstChild || firstChild.tagName.toLowerCase() !== 'script') {
+          showFallback('The snippet did not contain a <script> tag.', true);
+          return false;
+        }
+
+        if (firstChild.src) {
+          var note = document.createElement('p');
           note.style.color = '#64748b';
           note.style.fontSize = '12px';
           note.textContent =
-            'Injecting snippet for tenant "' +
-            tenant +
-            '" (built from ?tenant=... because no ?script was given).';
-          host.appendChild(note);
-          return;
+            'Loaded external widget script: ' + firstChild.src +
+            ' (tenant="' + (firstChild.getAttribute('data-tenant') || '?') +
+            '"). The chat button should appear if the widget runs.';
+          host.insertBefore(note, host.firstChild);
         } else {
-          showFallback(
-            'No ?script= or ?tenant= found. ' +
-              'Example: https://ai-chatbot-proposal.pages.dev/test?tenant=iron-iv' +
-              ' or pass ?script=<encoded snippet>.'
-          );
+          var note = document.createElement('p');
+          note.style.color = '#64748b';
+          note.style.fontSize = '12px';
+          note.textContent = 'Injected inline widget script.';
+          host.insertBefore(note, host.firstChild);
+        }
+
+        return true;
+      }
+
+      var params = new URLSearchParams(location.search);
+      var snippet = params.get('script');
+
+      if (snippet) {
+        snippet = decode(snippet);
+        if (!snippet.trim().toLowerCase().startsWith('<script')) {
+          showFallback('The script parameter did not look like a <script> tag.', true);
           return;
         }
+
+        removeOldScripts();
+        if (!insertScriptElement(snippet)) {
+          return;
+        }
+        return;
       }
- 
-      // Remove any previous widget scripts before injecting the new one.
-      Array.prototype.forEach.call(
-        host.querySelectorAll(
-          'script[src*="widget.js"], ' +
-          'script[data-tenant]'
-        ),
-        function (el) { el.remove(); }
+
+      var tenant = params.get('tenant');
+      if (tenant) {
+        removeOldScripts();
+
+        var widgetHost = 'https://chatbot-widget-0of.pages.dev';
+        var apiHost = 'https://chatbot-api.weblyftt.workers.dev';
+
+        var scriptEl = document.createElement('script');
+        scriptEl.src = widgetHost + '/widget.js';
+        scriptEl.setAttribute('data-tenant', tenant);
+        scriptEl.setAttribute('data-api-url', apiHost);
+
+        var note = document.createElement('p');
+        note.style.color = '#64748b';
+        note.style.fontSize = '12px';
+        note.textContent =
+          'Injecting widget script for tenant "' + tenant +
+          '" (built from ?tenant=... because no ?script was given).';
+        host.appendChild(note);
+        host.appendChild(scriptEl);
+
+        return;
+      }
+
+      showFallback(
+        'No ?script= or ?tenant= found. ' +
+        'Example: https://ai-chatbot-proposal.pages.dev/test?tenant=iron-iv' +
+        ' or pass ?script=<encoded snippet>.'
       );
- 
-      host.innerHTML = snippet;
     })();
   </script>
 </body>
