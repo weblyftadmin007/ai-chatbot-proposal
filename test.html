@@ -1,15 +1,91 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chatbot Widget Test</title>
 </head>
 <body>
   <h1>Chatbot test page</h1>
-  <p>If the blue chat button appears bottom-right, the widget is working.</p>
-
-  <!-- Widget script: loads the deployed widget, points it at your tenant + Worker API -->
-  <script src="https://chatbot-widget-0of.pages.dev/widget.js"
-          data-tenant="weblyft-design"
-          data-api-url="https://chatbot-api.weblyftt.workers.dev"></script>
+  <p>If the chat button appears, the widget loaded for the snippet in the URL.</p>
+ 
+  <div id="widget-host"></div>
+ 
+  <script>
+    (function () {
+      const host = document.getElementById('widget-host');
+ 
+      function stripHtml(html) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        return tmp.textContent || tmp.innerText || '';
+      }
+ 
+      function showFallback(message) {
+        const p = document.createElement('p');
+        p.style.color = '#64748b';
+        p.textContent = message;
+        host.appendChild(p);
+      }
+ 
+      function decode(s) {
+        try { return decodeURIComponent(s); }
+        catch (e) { return s; }
+      }
+ 
+      const params = new URLSearchParams(location.search);
+      let snippet = params.get('script');
+ 
+      if (snippet) {
+        snippet = decode(snippet);
+        if (!snippet.trim().toLowerCase().startsWith('<script')) {
+          showFallback('The script parameter did not look like a <script> tag.');
+          return;
+        }
+      } else {
+        const tenant = params.get('tenant');
+        if (tenant) {
+          const widgetHost = 'https://chatbot-widget-0of.pages.dev';
+          const apiHost = 'https://chatbot-api.weblyftt.workers.dev';
+          snippet =
+            '<script src="' +
+            widgetHost +
+            '/widget.js" data-tenant="' +
+            tenant +
+            '" data-api-url="' +
+            apiHost +
+            '"></script>';
+          host.innerHTML = snippet;
+          const note = document.createElement('p');
+          note.style.color = '#64748b';
+          note.style.fontSize = '12px';
+          note.textContent =
+            'Injecting snippet for tenant "' +
+            tenant +
+            '" (built from ?tenant=... because no ?script was given).';
+          host.appendChild(note);
+          return;
+        } else {
+          showFallback(
+            'No ?script= or ?tenant= found. ' +
+              'Example: https://ai-chatbot-proposal.pages.dev/test?tenant=iron-iv' +
+              ' or pass ?script=<encoded snippet>.'
+          );
+          return;
+        }
+      }
+ 
+      // Remove any previous widget scripts before injecting the new one.
+      Array.prototype.forEach.call(
+        host.querySelectorAll(
+          'script[src*="widget.js"], ' +
+          'script[data-tenant]'
+        ),
+        function (el) { el.remove(); }
+      );
+ 
+      host.innerHTML = snippet;
+    })();
+  </script>
 </body>
 </html>
